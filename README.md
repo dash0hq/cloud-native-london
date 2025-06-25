@@ -8,6 +8,8 @@ A demonstration of modern observability stack featuring OpenTelemetry, Prometheu
 
 This demo deploys a complete cloud-native observability stack on Kubernetes using Kind:
 
+![Overview](./images/overview.png)
+
 ### Applications
 - **todo-go**: Go REST API for todo management with PostgreSQL backend
 - **todo-java**: Java Spring Boot REST API with MySQL backend
