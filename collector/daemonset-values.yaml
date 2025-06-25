@@ -1,0 +1,137 @@
+fullnameOverride: otel-collector
+mode: daemonset
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+
+resources:
+  limits:
+    memory: 512Mi
+  requests:
+    memory: 256Mi
+
+extraEnvs:
+  - name: DASH0_AUTHORIZATION_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: dash0-secrets
+        key: dash0-authorization-token
+  - name: OPENSEARCH_USERNAME
+    value: admin  
+  - name: OPENSEARCH_PASSWORD
+    value: SecureP@ssw0rd123  
+
+clusterRole:
+  create: true
+  rules:
+    - apiGroups: [""]
+      resources: ["nodes/proxy"]
+      verbs: ["get"]
+
+presets:
+  logsCollection:
+    enabled: true
+  kubernetesAttributes:
+    enabled: true
+    extractAllPodLabels: true
+    extractAllPodAnnotations: true
+  kubeletMetrics:
+    enabled: true
+  hostMetrics:
+    enabled: true
+
+service:
+  enabled: true
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc: {}
+        http: {}
+    kubeletstats:
+      insecure_skip_verify: true
+      metrics:
+        container.cpu.utilization:
+          enabled: false
+        k8s.node.cpu.utilization:
+          enabled: false
+        k8s.pod.cpu.utilization:
+          enabled: false
+        container.cpu.usage:
+          enabled: true
+        k8s.node.cpu.usage:
+          enabled: true
+        k8s.pod.cpu.usage:
+          enabled: true
+        k8s.pod.cpu_limit_utilization:
+          enabled: true
+        k8s.pod.cpu_request_utilization:
+          enabled: true
+        k8s.pod.memory_limit_utilization:
+          enabled: true
+        k8s.pod.memory_request_utilization:
+          enabled: true
+
+  processors:
+    batch: {}
+
+    attributes/flatten:
+      actions:
+        - action: insert
+          key: resource.app.kubernetes_io_component
+          from_attribute: app.kubernetes.io/component
+        - action: delete
+          key: app.kubernetes.io/component
+
+  exporters:
+    otlp/dash0:
+      auth:
+        authenticator: bearertokenauth/dash0
+      endpoint: ingress.eu-west-1.aws.dash0-dev.com:4317
+
+    otlphttp/prometheus:
+      endpoint: http://prometheus.default.svc.cluster.local:9090/api/v1/otlp
+      tls:
+        insecure: true
+
+    otlp/jaeger:
+      endpoint: jaeger-collector.default.svc.cluster.local:4317 
+      tls:
+        insecure: true
+
+    opensearch/log:
+      http:
+        endpoint: https://opensearch-cluster-master.default.svc.cluster.local:9200
+        tls:
+          insecure_skip_verify: true
+        auth:
+          authenticator: basicauth/client
+
+  extensions:
+    bearertokenauth/dash0:
+      scheme: Bearer
+      token: ${env:DASH0_AUTHORIZATION_TOKEN}
+    basicauth/client:
+      client_auth:
+        username: ${env:OPENSEARCH_USERNAME}
+        password: ${env:OPENSEARCH_PASSWORD}
+
+  service:
+    extensions:
+      - bearertokenauth/dash0
+      - basicauth/client
+      - health_check
+    pipelines:
+      metrics:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [otlp/dash0, otlphttp/prometheus]
+      traces:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [otlp/dash0, otlp/jaeger]
+      logs:
+        receivers: [otlp]
+        processors: [batch, attributes/flatten]
+        exporters: [otlp/dash0, opensearch/log]

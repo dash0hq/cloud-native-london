@@ -1,0 +1,129 @@
+mode: deployment
+replicaCount: 1
+fullnameOverride: otel-collector-deployment
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+
+resources:
+  limits:
+    memory: 512Mi
+  requests:
+    memory: 256Mi
+
+extraEnvs:
+  - name: DASH0_AUTHORIZATION_TOKEN
+    valueFrom:
+      secretKeyRef:
+        name: dash0-secrets
+        key: dash0-authorization-token
+  - name: OPENSEARCH_USERNAME
+    value: admin
+  - name: OPENSEARCH_PASSWORD
+    value: SecureP@ssw0rd123
+
+presets:
+  clusterMetrics:
+    enabled: true
+  kubernetesEvents:
+    enabled: true
+
+service:
+  enabled: true
+
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc: {}
+        http: {}
+    
+    prometheus:
+      config:
+        scrape_configs:
+          - job_name: 'kubernetes-pods'
+            kubernetes_sd_configs:
+              - role: pod
+            relabel_configs:
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+                action: keep
+                regex: true
+              - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+                action: replace
+                target_label: __metrics_path__
+                regex: (.+)
+              - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+                action: replace
+                regex: ([^:]+)(?::\d+)?;(\d+)
+                replacement: $1:$2
+                target_label: __address__
+              - action: labelmap
+                regex: __meta_kubernetes_pod_label_(.+)
+              - source_labels: [__meta_kubernetes_namespace]
+                action: replace
+                target_label: kubernetes_namespace
+              - source_labels: [__meta_kubernetes_pod_name]
+                action: replace
+                target_label: kubernetes_pod_name
+
+  processors:
+    batch: {}
+    attributes/flatten:
+      actions:
+        - action: insert
+          key: resource.app.kubernetes_io_component
+          from_attribute: app.kubernetes.io/component
+        - action: delete
+          key: app.kubernetes.io/component
+
+  exporters:
+    otlp/dash0:
+      auth:
+        authenticator: bearertokenauth/dash0
+      endpoint: ingress.eu-west-1.aws.dash0-dev.com:4317
+
+    otlp/jaeger:
+      endpoint: jaeger-collector.default.svc.cluster.local:4317 
+      tls:
+        insecure: true
+
+    otlphttp/prometheus:
+      endpoint: http://prometheus.default.svc.cluster.local:9090/api/v1/otlp
+      tls:
+        insecure: true
+
+    opensearch/log:
+      http:
+        endpoint: https://opensearch-cluster-master.default.svc.cluster.local:9200
+        tls:
+          insecure_skip_verify: true
+        auth:
+          authenticator: basicauth/client
+
+  extensions:
+    bearertokenauth/dash0:
+      scheme: Bearer
+      token: ${env:DASH0_AUTHORIZATION_TOKEN}
+    basicauth/client:
+      client_auth:
+        username: ${env:OPENSEARCH_USERNAME}
+        password: ${env:OPENSEARCH_PASSWORD}
+
+  service:
+    extensions:
+      - bearertokenauth/dash0
+      - basicauth/client
+      - health_check
+    pipelines:
+      metrics:
+        receivers: [otlp, prometheus]
+        processors: [batch]
+        exporters: [otlp/dash0, otlphttp/prometheus]
+      traces:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [otlp/dash0, otlp/jaeger]
+      logs:
+        receivers: [otlp]
+        processors: [batch,attributes/flatten]
+        exporters: [otlp/dash0, opensearch/log]
