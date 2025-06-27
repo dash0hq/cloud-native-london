@@ -19,7 +19,7 @@ public class TodoController {
         this.repository = repository;
     }
 
-    @GetMapping("/all")
+    @GetMapping
     public List<Todo> getAllTodos() {
         return repository.findAll();
     }

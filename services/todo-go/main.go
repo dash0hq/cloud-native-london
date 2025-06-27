@@ -46,7 +46,7 @@ func main() {
 
 	r := mux.NewRouter().StrictSlash(true)
 	r.Handle("/metrics", promhttp.Handler())
-	r.HandleFunc("/todos/all", AllTodos).Methods("GET")
+	r.HandleFunc("/todos", AllTodos).Methods("GET")
 	r.HandleFunc("/todos/{id}", GetTodo).Methods("GET")
 	r.HandleFunc("/todos", CreateTodo).Methods("POST")
 	r.HandleFunc("/todos/{id}", DeleteTodo).Methods("DELETE")

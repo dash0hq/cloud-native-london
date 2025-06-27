@@ -11,6 +11,7 @@ This demo deploys a complete cloud-native observability stack on Kubernetes usin
 ![Overview](./images/overview.png)
 
 ### Applications
+- **frontend**: Frontend that allows for switching backend
 - **todo-go**: Go REST API for todo management with PostgreSQL backend
 - **todo-java**: Java Spring Boot REST API with MySQL backend
 
@@ -64,28 +65,14 @@ make deploy-k8s
 
 At this point, applications are running but producing **no telemetry data**. This demonstrates the baseline state before instrumentation.
 
-### 4. Verify Applications Are Running
-```bash
-# Check application status
-kubectl get pods
-
-# Test todo-go service
-kubectl port-forward svc/todo-go 3000:3000
-curl http://localhost:3000/todos/all
-
-# Test todo-java service  
-kubectl port-forward svc/todo-java 3000:3000
-curl http://localhost:3000/todos/all
-```
-
-### 5. Add Instrumentation Resource
+### 4. Add Instrumentation Resource
 ```bash
 make instrumentation
 ```
 
 This creates the OpenTelemetry `Instrumentation` resource, but **applications still won't be instrumented** because the OpenTelemetry Operator uses opt-in instrumentation.
 
-### 6. Enable Auto-Instrumentation (Manual Annotation)
+### 5. Enable Auto-Instrumentation (Manual Annotation)
 Since auto-instrumentation is opt-in, you need to add annotations to each deployment:
 
 #### For Java Application:
@@ -109,22 +96,13 @@ kubectl edit deploy todo-go
 # Add: instrumentation.opentelemetry.io/inject-go: "opentelemetry/instrumentation"
 ```
 
-### 7. Verify Telemetry Collection
+### 6. Verify Telemetry Collection
 
-After adding annotations, pods will restart with instrumentation. Generate some traffic and verify data collection:
+After adding annotations, pods will restart with instrumentation. Generate some traffic using the frontend and verify data collection:
 
 ```bash
-
-# We can start with the go service
-kubectl port-forward svc/todo-go 3000:3000
-curl -X POST http://localhost:3000/todos -H 'Content-Type: application/json' -d '{"Name": "Buy London souvenirs"}'
-curl -X POST http://localhost:3000/todos -H 'Content-Type: application/json' -d '{"Name": "Buy a beer!"}'
-
-# Continue with the java service
-kubectl port-forward svc/todo-java 3000:3000
-curl -X POST http://localhost:3000/todos -H 'Content-Type: application/json' -d '{"Name": "Buy London souvenirs"}'
-curl -X POST http://localhost:3000/todos -H 'Content-Type: application/json' -d '{"Name": "Buy a beer!"}'
-
+# port-forward the frontend service and visit localhost:3000 in your browser.
+kubectl port-forward svc/frontend 3000:80
 ```
 
 #### Check Prometheus Metrics:
@@ -152,21 +130,21 @@ kubectl port-forward svc/opensearch-dashboards 5601:5601
 
 Perses provides a modern alternative to Grafana with native Kubernetes integration and dashboard-as-code capabilities.
 
-### 8. Deploy Perses Datasource
+### 7. Deploy Perses Datasource
 ```bash
 kubectl apply -f ./perses/prometheus-datasource.yaml
 ```
 
 This creates a `PersesDatasource` that connects Perses to your Prometheus instance.
 
-### 9. Deploy JVM Dashboard
+### 8. Deploy JVM Dashboard
 ```bash
 kubectl apply -f ./perses/jvm-dashboard.yaml
 ```
 
 This demonstrates **dashboard-as-code** by deploying a comprehensive JVM metrics dashboard defined entirely in YAML.
 
-### 10. Access Perses Dashboard
+### 9. Access Perses Dashboard
 ```bash
 kubectl port-forward svc/perses 8080:8080
 # Visit: http://localhost:8080

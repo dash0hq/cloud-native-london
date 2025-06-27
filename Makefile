@@ -14,14 +14,17 @@ instrumentation:
 build:
 	docker build -f ./services/todo-go/Dockerfile -t todo-go:$(VERSION) ./services/todo-go
 	docker build -f ./services/todo-java/Dockerfile -t todo-java:$(VERSION) ./services/todo-java
+	docker build -f ./services/frontend/Dockerfile -t todo-frontend:$(VERSION) ./services/frontend
 
 kind-load: build
 	kind load docker-image --name $(CLUSTER_NAME) todo-go:$(VERSION)
 	kind load docker-image --name $(CLUSTER_NAME) todo-java:$(VERSION)
+	kind load docker-image --name $(CLUSTER_NAME) todo-frontend:$(VERSION)
 
 deploy-k8s: kind-load 
 	kubectl apply -f ./services/todo-go/manifests/
 	kubectl apply -f ./services/todo-java/manifests/
+	kubectl apply -f ./services/frontend/manifests/
 
 deploy-postgres:
 	helm install pg oci://registry-1.docker.io/bitnamicharts/postgresql \

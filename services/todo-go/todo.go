@@ -1,6 +1,6 @@
 package main
 
 type Todo struct {
-	Name string
-	Id   string
+	Name string `json:"name"`
+	Id   string `json:"id"`
 }
